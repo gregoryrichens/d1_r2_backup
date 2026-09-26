@@ -1,12 +1,12 @@
-# CRM D1 Backup Worker
+# D1 Backup Worker
 
 A small Cloudflare Worker that creates a scheduled backup of a Cloudflare D1 database and stores the resulting SQL export in a private Cloudflare R2 bucket.
 
-The goal is simple: **make the CRM database recoverable if something goes wrong with the live D1 database.**
+The goal is simple: **make the database recoverable if something goes wrong with the live D1 database.**
 
 ## Why this exists
 
-The CRM's D1 database is the primary source of truth for application data. A backup gives us an independent copy that can be retained beyond D1's normal point-in-time recovery window and used to rebuild the database if necessary.
+The D1 database is the primary source of truth for application data. A backup gives us an independent copy that can be retained beyond D1's normal point-in-time recovery window and used to rebuild the database if necessary.
 
 This worker is intentionally narrow in scope. It does one thing:
 
@@ -19,17 +19,17 @@ There is no application traffic, user interface, or public API associated with t
 ```text
                  Cloudflare
 
-   D1 (CRM production database)
+   D1 (production database)
                |
                | D1 Export REST API
                v
-       crm-d1-backup Worker
+       d1-backup Worker
                |
                | scheduled() via Cron Trigger
                |
                | SQL export
                v
-        R2: crm-backups
+        R2: backups
                |
                v
      dated .sql backup files
@@ -38,7 +38,7 @@ There is no application traffic, user interface, or public API associated with t
 The worker uses two different Cloudflare mechanisms:
 
 - **D1 REST API** — starts and polls the database export.
-- **R2 Worker binding** — writes the completed SQL export directly to the `crm-backups` bucket.
+- **R2 Worker binding** — writes the completed SQL export directly to the `backups` bucket.
 
 Everything runs inside Cloudflare.
 
@@ -46,13 +46,13 @@ Everything runs inside Cloudflare.
 
 | Resource | Name | Purpose |
 |---|---|---|
-| Worker | `crm-d1-backup` | Runs the backup code |
-| D1 API token | `crm-d1-backup-export` | Allows the Worker to call the D1 export API |
-| R2 bucket | `crm-backups` | Stores the backup files |
+| Worker | `d1-backup` | Runs the backup code |
+| D1 API token | `d1-backup-export` | Allows the Worker to call the D1 export API |
+| R2 bucket | `backups` | Stores the backup files |
 | Worker secret | `D1_REST_API_TOKEN` | Stores the API token securely at runtime |
 | Worker variable | `ACCOUNT_ID` | Cloudflare account containing the D1 database |
 | Worker variable | `DATABASE_ID` | ID of the production D1 database |
-| R2 binding | `BACKUP_BUCKET` | Points the Worker at `crm-backups` |
+| R2 binding | `BACKUP_BUCKET` | Points the Worker at `backups` |
 
 ## Backup schedule
 
@@ -76,7 +76,7 @@ The production schedule should be changed to the desired daily UTC time after te
 4. The Worker polls the export until it is complete.
 5. D1 returns a temporary signed download URL for the SQL export.
 6. The Worker downloads the export with a per-request timeout.
-7. The Worker streams the SQL directly into the `crm-backups` R2 bucket.
+7. The Worker streams the SQL directly into the `backups` R2 bucket.
 8. The backup is stored under a dated object key.
 
 Example object layout:
@@ -110,7 +110,7 @@ The repository should never contain:
 
 The Worker is managed from:
 
-**Cloudflare Dashboard → Workers & Pages → `crm-d1-backup`**
+**Cloudflare Dashboard → Workers & Pages → `d1-backup`**
 
 Useful locations:
 
@@ -139,7 +139,7 @@ D1_REST_API_TOKEN   (secret)
 Required binding:
 
 ```text
-BACKUP_BUCKET → crm-backups
+BACKUP_BUCKET → backups
 ```
 
 ### Schedule
@@ -177,7 +177,7 @@ A restore test should be performed periodically using a non-production D1 databa
 
 - expected tables exist
 - critical row counts are plausible
-- important CRM records can be queried
+- important records can be queried
 - the application can be pointed at the restored database in a controlled test environment
 
 Do not use the production D1 database for restore testing.
@@ -205,7 +205,7 @@ The code includes an explicit timeout for individual HTTP requests and an overal
 
 ## Database size assumption
 
-This Worker is intended for a relatively small CRM D1 database. The current expected maximum database size is approximately **10 MB**.
+This Worker is intended for a relatively small D1 database. The current expected maximum database size is approximately **10 MB**.
 
 That makes a simple Cron-triggered Worker practical. If the database grows substantially or export times approach the Worker execution limit, the backup implementation should be reconsidered in favor of a durable Cloudflare Workflow.
 
@@ -220,7 +220,7 @@ The backup system is deliberately boring:
 - R2 controls retention.
 - A separate D1 database can be used to verify recovery.
 
-The backup system should not become part of the CRM's application logic or request path.
+The backup system should not become part of the application logic or request path.
 
 ## Development and deployment
 
@@ -236,19 +236,19 @@ scheduled()
   -> write to BACKUP_BUCKET
 ```
 
-A code change should be followed by a manual backup run and verification that a new object appears in `crm-backups`.
+A code change should be followed by a manual backup run and verification that a new object appears in `backups`.
 
 ## Checklist after deployment
 
-- [ ] Worker `crm-d1-backup` exists
+- [ ] Worker `d1-backup` exists
 - [ ] Public Worker URLs are disabled
 - [ ] `ACCOUNT_ID` configured
 - [ ] `DATABASE_ID` configured
 - [ ] `D1_REST_API_TOKEN` configured as a secret
-- [ ] `BACKUP_BUCKET` bound to `crm-backups`
+- [ ] `BACKUP_BUCKET` bound to `backups`
 - [ ] Cron Trigger configured
 - [ ] Manual backup succeeds
-- [ ] `.sql` object appears in `crm-backups`
+- [ ] `.sql` object appears in `backups`
 - [ ] R2 retention rule configured
 - [ ] Restore test completed successfully
 

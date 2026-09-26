@@ -13,7 +13,7 @@
  *   D1_REST_API_TOKEN
  *
  * R2 binding:
- *   BACKUP_BUCKET -> crm-backups
+ *   BACKUP_BUCKET -> backups
  *
  * Cron Trigger:
  *   configured in the Cloudflare dashboard
@@ -34,7 +34,7 @@ export default {
   },
 
   async fetch() {
-    return new Response("CRM D1 backup worker");
+    return new Response("D1 backup worker");
   },
 };
 
@@ -137,7 +137,7 @@ async function runBackup(env) {
    * D1 requires an in-progress export to be continually
    * polled or the export will be cancelled.
    *
-   * The export should be very small for this CRM,
+   * The export should be very small for this app,
    * but we still enforce a 10-minute upper bound.
    */
 
